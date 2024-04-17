@@ -1,3 +1,5 @@
+name: dse
+version: 1.0.0
 fra_formatVersion: 1
 inputs:
   dse-host-count:

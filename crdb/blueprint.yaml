@@ -6,17 +6,25 @@ inputs:
     title: Number of VMs
     type: integer
     default: 4
-  disk_size:
-    title: Disk Size
-    type: integer
-    default: 100
-  number_of_disks:
-    title: Number of Disks
-    type: integer
-    default: 1
+  diskConfig:
+    type: array
+    title: Add Additional Disks
+    minItems: 0
+    maxItems: 5
+    items:
+      type: object
+      properties:
+        size:
+          type: integer
+          title: Size GB
+          default: 20
+          maximum: 200
+        name:
+          type: string
+          title: name
 resources:
   crdb-vm:
-    type: Cloud.Machine
+    type: Cloud.vSphere.Machine
     allocatePerInstance: true
     properties:
       image: test-image
@@ -37,7 +45,7 @@ resources:
         ssh_pwauth: true
         runcmd:
           - hostnamectl set-hostname --pretty ${self.resourceName}      
-      attachedDisks: ${map_to_object(slice(resource.disk[*].id, input.number_of_disks*count.index, input.number_of_disks*(count.index + 1)), "source")}
+      attachedDisks: ${map_to_object(slice(resource.disk[*].id, length(input.diskConfig) * count.index, length(input.diskConfig) * (count.index + 1)), "source")}
       networks:
         - network: ${resource.web_net.id}
           assignment: static
@@ -47,12 +55,13 @@ resources:
     type: Cloud.vSphere.Disk
     allocatePerInstance: true
     properties:
-      capacityGb: ${input.disk_size}
+      capacityGb: ${input.diskConfig[count.index % length(input.diskConfig)].size}
       SCSIController: ${'SCSI_Controller_' + to_string(4*(count.index/4 - floor(count.index/4)))}
-      count: ${input.vm_count * input.number_of_disks}
+      count: ${input.vm_count * length(input.diskConfig)}
+      name: ${input.diskConfig[count.index % length(input.diskConfig)].name}
       tags:
         - key: App
-          value: crdb
+          value: ${to_string('crdb_' + count.index)}
   prod_net:
     type: Cloud.Network
     properties:
@@ -122,6 +131,7 @@ resources:
           rack: 1
           port: 80
           verbose: true
+          disks: ${input.diskConfig}
       host_groups:
         crdb:
           - ${resource.crdb-vm.*}

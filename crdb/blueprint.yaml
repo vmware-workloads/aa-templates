@@ -56,7 +56,7 @@ resources:
     allocatePerInstance: true
     properties:
       capacityGb: ${input.diskConfig[count.index % length(input.diskConfig)].size}
-      SCSIController: ${'SCSI_Controller_' + to_string(4*(count.index/4 - floor(count.index/4)))}
+      SCSIController: ${'SCSI_Controller_' + to_string(count.index % 4)}
       count: ${input.vm_count * length(input.diskConfig)}
       name: ${input.diskConfig[count.index % length(input.diskConfig)].name}
       tags:

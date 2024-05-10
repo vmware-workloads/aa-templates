@@ -2,13 +2,25 @@ name: crdb
 version: 1.0.0
 formatVersion: 1
 inputs:
+  vmUsername:
+    type: string
+    title: CRDB VM Username
+    default: ansible
+  vmSize:
+    type: string
+    title: CRDB VM Size
+    default: large
+    enum:
+      - small
+      - medium
+      - large
   vm_count:
-    title: Number of VMs
+    title: Number of CRDB VMs
     type: integer
     default: 4
   diskConfig:
     type: array
-    title: Add Additional Disks
+    title: Additional Disks (per VM)
     minItems: 0
     maxItems: 5
     items:
@@ -22,35 +34,47 @@ inputs:
         name:
           type: string
           title: name
+  os_diskSize:
+    type: integer
+    title: OS Disk Size (GB)
+    minimum: 60
+    maximum: 200
+    default: 60
+  vmNotes:
+    title: VM Notes
+    type: string
+    default: crdb
 resources:
   crdb-vm:
     type: Cloud.vSphere.Machine
     allocatePerInstance: true
     properties:
-      image: test-image
-      flavor: large
       count: ${input.vm_count}
+      image: test-image
+      flavor: ${input.vmSize}
       remoteAccess:
         authentication: publicPrivateKey
         sshKey: ${secret.jumphost-public-key}
-        username: ansible
+        username: ${input.vmUsername}
       cloudConfigSettings:
         deploymentFailOnCloudConfigRuntimeError: true
       cloudConfig: |
         #cloud-config
+        hostname: ${self.resourceName}   
         users:
-          - name: ansible
+          - default
+          - name: ${input.vmUsername}
             shell: /bin/bash
-            sudo: ['ALL=(ALL) NOPASSWD:ALL']  
+            sudo: ALL=(ALL) NOPASSWD:ALL
         ssh_pwauth: true
         runcmd:
-          - hostnamectl set-hostname --pretty ${self.resourceName}      
+          - netplan apply      
       attachedDisks: ${map_to_object(slice(resource.disk[*].id, length(input.diskConfig) * count.index, length(input.diskConfig) * (count.index + 1)), "source")}
       networks:
         - network: ${resource.web_net.id}
           assignment: static
       storage:
-        bootDiskCapacityInGB: 60
+        bootDiskCapacityInGB: ${input.os_diskSize}
   disk:
     type: Cloud.vSphere.Disk
     allocatePerInstance: true
@@ -111,9 +135,6 @@ resources:
     properties:
       hosts:
         - ${resource.crdb-vm.*}
-      base_url: ${propgroup.aap_2.aap_url}
-      password: ${propgroup.aap_2.aap_password}
-      username: ${propgroup.aap_2.aap_user}
       ssl_verify: false
       verbose: true
       organization_name: Default
